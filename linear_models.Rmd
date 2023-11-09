@@ -1,0 +1,94 @@
+---
+title: "linear_models"
+author: "Quinn Anderson"
+date: "2023-11-09"
+output: html_document
+---
+
+## Load and clean Airbnb data
+
+let's set up:
+
+```{r}
+library(tidyverse)
+library(p8105.datasets)
+
+set.seed(1)
+```
+
+```{r}
+data("nyc_airbnb")
+
+nyc_airbnb = 
+  nyc_airbnb |> 
+  mutate(stars = review_scores_location / 2) |> 
+  rename(
+    borough = neighbourhood_group,
+    neighborhood = neighbourhood) |> 
+  filter(borough != "Staten Island") |> 
+  select(price, stars, borough, neighborhood, room_type)
+```
+
+Now, let's fit a model !!! 
+
+A good place to start is to consider price as an outcome that may depend on rating and borough. We fit that initial model in the following code.
+
+```{r}
+fit =
+  nyc_airbnb |> 
+  lm(price ~ stars + borough, data = _)
+```
+
+
+let's look at the fit! although these are not usually as helpful to look at as is. 
+
+```{r}
+fit
+summary(fit)
+summary(fit)$coef
+coef(fit)
+fitted.values(fit)
+```
+
+so, let's tidy the output:
+
+```{r}
+fit |> 
+  broom::glance()
+```
+
+
+now, let's tidy up the coefficients. now it's a tibble! so we can use (manipulate) as a dataframe.
+
+```{r}
+fit |> 
+  broom::tidy()
+```
+
+```{r}
+fit |> 
+  broom::tidy() |> 
+  select(term, estimate, p.value) |> 
+  mutate(term = str_replace(term, "^borough", "Borough: ")) |> 
+  knitr::kable(digits = 3)
+```
+
+
+## Fit another model
+
+```{r}
+fit = 
+  nyc_airbnb |> 
+  mutate(
+    borough = fct_infreq(borough),
+    room_type = fct_infreq(room_type)) |> 
+  lm(price ~ stars + borough + room_type, data = _)
+
+fit |> 
+  broom::tidy()
+```
+
+^ the reference categories for `borough` variable, keeping `room_type` and `stars` fixed. 
+
+
+
