@@ -92,3 +92,67 @@ fit |>
 
 
 
+## Regression Diagnostics
+
+the key step is to make sure that we have the residuals that we need. 
+
+```{r}
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = resid)) +
+  geom_density() + 
+  xlim(-100, 500)
+
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = borough, y = resid)) +
+  geom_violin()
+
+nyc_airbnb |> 
+  modelr::add_residuals(fit) |> 
+  ggplot(aes(x = stars, y = resid)) +
+  geom_point()
+```
+
+^ this is now a dataframe, so you can do things like plot the residuals. 
+
+our results are also sensitive to the skewness of the p-values. we need to check that we are not violating the assumptions of non-skewed distributions, etc. 
+
+
+## Hypothesis test for categorical predictor
+
+fit a "null" and "alternative" model
+
+```{r}
+fit_null = lm(price ~ stars + borough, data = nyc_airbnb)
+
+fit_alternative = lm(price ~ stars + borough + room_type, data = nyc_airbnb)
+
+anova(fit_null, fit_alternative) |> 
+  broom::tidy()
+```
+
+^ to test the hypothesis of whether `room_type` is significant. 
+
+
+
+## Borough-level differences
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
