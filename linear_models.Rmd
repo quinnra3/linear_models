@@ -138,13 +138,97 @@ anova(fit_null, fit_alternative) |>
 
 ## Borough-level differences
 
+```{r}
+fit = 
+  nyc_airbnb |> 
+  lm(price = stars * borough + room_type * borough, data = _)
+
+fit |> 
+  broom::tidy()
+```
+
+my goal right now is to look at four different linear models, each one looking at effect of borough on stars and room type. do that using `nest`. 
+
+also, add a linear model once you have four different dfs in one. 
+
+```{r}
+airbnb_lm = function(df) {
+  lm(price ~ stars + room_type, data = df)
+}
+
+nyc_airbnb |> 
+  nest(df = -borough) |> 
+  mutate(
+    models = map(df, airbnb_lm),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(borough, results) |> 
+  unnest(results) |> 
+  select(borough, term, estimate) |> 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |> 
+  knitr::kable(digits = 2)
+```
 
 
+same thing but just a little different...using an anonymous function rather than creating a function as above: `\(df) lm(price ~ stars + borough, data = df)`
+
+```{r}
+nyc_airbnb |> 
+  nest(df = -borough) |> 
+  mutate(
+    models = map(df, \(df) lm(price ~ stars + borough, data = df)),
+    results = map(models, broom::tidy)
+  ) |> 
+  select(borough, results) |> 
+  unnest(results) |> 
+  select(borough, term, estimate) |> 
+  pivot_wider(
+    names_from = term,
+    values_from = estimate
+  ) |> 
+  knitr::kable(digits = 2)
+```
+
+^ don't do it if you don't have to. when you use `map` a lot, people use this more often. 
 
 
+## Binary outcomes
+
+```{r}
+baltimore_df = 
+  read_csv("data/homicide-data.csv") |> 
+  filter(city == "Baltimore") |> 
+  mutate(
+    resolved = as.numeric(disposition == "Closed by arrest"),
+    victim_age = as.numeric(victim_age),
+    victim_race = fct_relevel(victim_race, "White")) |> 
+  select(resolved, victim_age, victim_race, victim_sex)
+
+baltimore_df |> view()
+```
 
 
+fitting a logistic regression
 
+
+```{r}
+fit_logistic = 
+  baltimore_df |> 
+  glm(
+    resolved ~ victim_age + victim_race + victim_sex,
+    data = _,
+    family = binomial())
+```
+
+look at model results
+
+```{r}
+fit_logistic |> 
+  broom::tidy()
+```
 
 
 
