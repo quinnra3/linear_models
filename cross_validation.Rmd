@@ -1,0 +1,165 @@
+---
+title: "cross validation"
+author: "Quinn Anderson"
+date: "2023-11-09"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+library(tidyverse)
+library(modelr)
+library(mgcv)
+
+set.seed(1)
+```
+
+## Nonlinear data and cross validation (CV) "by hand"
+
+First, generate a nonlinear dataframe in a tibble and provide a visualization of this data. 
+
+```{r}
+nonlin_df = 
+  tibble(
+    id = 1:100,
+    x = runif(100, 0, 1),
+    y = 1 - 10 * (x - .3) ^ 2 + rnorm(100, 0, .3)
+  )
+
+nonlin_df |> 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point()
+```
+
+Do the train / test split using `anti_join`, and see the results in a scatterplot: 
+
+```{r}
+train_df = sample_n(nonlin_df, 80)
+test_df = anti_join(nonlin_df, train_df, by = "id")
+
+train_df |> 
+  ggplot(aes(x = x, y = y)) + 
+  geom_point() + 
+  geom_point(data = test_df, color = "red")
+```
+
+```{r}
+linear_mod = lm(y ~ x, data = train_df)
+smooth_mod = mgcv::gam(y ~ s(x), data = train_df)
+wiggly_mod = mgcv::gam(y ~ s(x, k = 30), sp = 10e-6, data = train_df)
+```
+
+^for`wiggly_mod`, the `k = 30` and `sp = ...` are related to how to smooth the prediction line. don't need to know the details of the mechanisms
+
+
+
+quick visualization: 
+
+```{r}
+train_df |> 
+  modelr::add_predictions(linear_mod) |> 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_path(aes(y = pred), color = "red")
+```
+
+```{r}
+train_df |> 
+  add_predictions(smooth_mod) |> 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() + 
+  geom_line(aes(y = pred), color = "red")
+```
+
+```{r}
+train_df |> 
+  add_predictions(wiggly_mod) |> 
+  ggplot(aes(x = x, y = y)) +
+  geom_point() + 
+  geom_line(aes(y = pred), color = "red")
+```
+
+^ intuition: if you have these three models, how do you know which one is the one you want to use in terms of implementing an analysis? well, they're not nested so that poses some problems. 
+
+how to assess overall goodness of fit: RMSE
+
+```{r}
+# RMSE on training data can be misleading...
+
+rmse(linear_mod, train_df)
+rmse(smooth_mod, train_df)
+rmse(wiggly_mod, train_df)
+```
+
+```{r}
+# RMSE on testing data gives a sense of prediction accuracy!
+
+rmse(linear_mod, test_df)
+rmse(smooth_mod, test_df)
+rmse(wiggly_mod, test_df)
+```
+
+^for each of these models for each of these datasets, how did they work on the data that we used to work? A: the wiggly model, because it has lowest RMSE = lowest SD. it seems it's getting the best predictions for the datasets we used to train the model, but not for future data. that's why the test data is off to the side. 
+
+
+
+## Use `modelr` for CV
+
+create new dataset using nonlinear dataframe. 
+
+```{r}
+cv_df = 
+  crossv_mc(nonlin_df, 100) |> 
+  mutate(
+    train = map(train, as_tibble),
+    test = map(test, as_tibble)
+  )
+```
+
+```{r}
+cv_df |> pull(train) |> nth(3) |> as_tibble()
+```
+
+^`crossv_mc` creates a "resample" (not tibble!) with two separate columns, automatically separates dataset. (resample keeps track of which rows are in the sample.) that's why we turn it into a tibble using `mutate(map())`
+
+
+now, apply each model to all training datasets, and evaluate on all testing datasets: 
+
+```{r}
+# from class demo: 
+
+cv_results = 
+  cv_df |> 
+  mutate(
+    linear_fit = map(train, \(df) lm(y ~ x, data = df)),
+    smooth_fit = map(train, \(df) mgcv::gam(y ~ s(x), data = df)),
+    wiggly_fit = map(train, \(df) mgcv::gam(y ~ s(x, k = 30), sp = 10e-6, data = df))
+    ) |> 
+  mutate(
+    rmse_linear = map2_dbl(linear_fit, test, \(mod, df) rmse(mod, df)),
+    rmse_smooth = map2_dbl(smooth_fit, test, \(mod, df) rmse(mod, df)),
+    rmse_wiggly = map2_dbl(wiggly_fit, test, \(mod, df) rmse(mod, df))
+    )
+```
+
+[LOOK online for the function part of this: why it helps to write a function off to the side]
+
+whew. alright, now, let's take a closer look at our results:
+
+```{r}
+cv_results |> 
+  select(starts_with("rmse")) |> 
+  pivot_longer(
+    everything(),
+    names_to = "model", 
+    values_to = "rmse",
+    names_prefix = "rmse_") |> 
+  mutate(model = fct_inorder(model)) |> 
+  ggplot(aes(x = model, y = rmse)) + geom_violin()
+```
+
+
+
+
+
+
+

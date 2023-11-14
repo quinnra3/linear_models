@@ -227,9 +227,16 @@ look at model results
 
 ```{r}
 fit_logistic |> 
-  broom::tidy()
+  broom::tidy() |> 
+  mutate(OR = exp(estimate)) |> 
+  select(term, estimate, OR)
 ```
 
+```{r}
+baltimore_df |> 
+  count(victim_race) |> 
+  arrange(desc(n))
+```
 
 
 
